@@ -1,6 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { UserEntity } from '@/apps/entity/user.entity';
+import { UserEntity } from '@/core/user/entity/user.entity';
 import { UserAuthService } from './user-auth.service';
 
 @Global()

@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
-import { UserEntity, UserRegistrationSource } from '@/apps/entity/user.entity';
+import { UserEntity, UserRegistrationSource } from '@/core/user/entity/user.entity';
 import { AuthService, AuthClient } from '@/core/auth';
 import { RedisService } from '@/core/redis/redis.service';
 import {
@@ -211,14 +211,22 @@ export class UserAuthService {
 
     const isMatch = await bcrypt.compare(params.password, user.passwordHash);
     if (!isMatch) {
-      const newCount = user.failedLoginCount + 1;
-      const updateData: Partial<UserEntity> = { failedLoginCount: newCount };
+      // 原子递增失败计数，避免并发问题
+      await this.userRepo
+        .createQueryBuilder()
+        .update(UserEntity)
+        .set({ failedLoginCount: () => 'failed_login_count + 1' })
+        .where('id = :id', { id: user.id })
+        .execute();
 
-      if (newCount >= MAX_FAILED_ATTEMPTS) {
-        updateData.lockedUntil = new Date(Date.now() + LOCK_DURATION_MINUTES * 60 * 1000);
+      // 重新查一次判断是否达到锁定阈值
+      const updated = await this.userRepo.findOne({ where: { id: user.id } });
+      if (updated && updated.failedLoginCount >= MAX_FAILED_ATTEMPTS) {
+        await this.userRepo.update(user.id, {
+          lockedUntil: new Date(Date.now() + LOCK_DURATION_MINUTES * 60 * 1000),
+        });
       }
 
-      await this.userRepo.update(user.id, updateData);
       throw new AppUnauthorizedException('用户名或密码错误');
     }
   }
