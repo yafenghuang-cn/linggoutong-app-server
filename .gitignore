@@ -3,6 +3,9 @@
 /node_modules
 /build
 
+# TypeScript
+*.tsbuildinfo
+
 # Logs
 logs
 *.log
@@ -45,6 +48,9 @@ lerna-debug.log*
 # temp directory
 .temp
 .tmp
+
+# AI uploads
+/uploads
 
 # Runtime data
 pids
