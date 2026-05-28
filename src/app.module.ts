@@ -11,6 +11,7 @@ import { RequestLoggingInterceptor } from '@/shared/request-logging.interceptor'
 
 import { CoreAuthModule, AuthGuard } from '@/core/auth';
 import { CoreRedisModule } from '@/core/redis/redis.module';
+import { CoreUserModule } from '@/core/user';
 import { AppsModule } from '@/apps/module';
 
 @Module({
@@ -32,6 +33,7 @@ import { AppsModule } from '@/apps/module';
     }),
     CoreRedisModule,
     CoreAuthModule,
+    CoreUserModule,
     AppsModule,
   ],
   providers: [

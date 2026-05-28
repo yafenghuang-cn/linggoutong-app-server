@@ -5,7 +5,6 @@ import * as bcrypt from 'bcryptjs';
 import { UserEntity, UserRegistrationSource } from '@/apps/entity/user.entity';
 import { AuthService, AuthClient } from '@/core/auth';
 import { RedisService } from '@/core/redis/redis.service';
-import { AppLoginDto, AppLoginType, AppQueryUserDto, AppRegisterDto, AppRegisterType } from '@/apps/dto/userDto';
 import {
   AppConflictException,
   AppDataNotFoundException,
@@ -16,11 +15,55 @@ import {
 const SALT_ROUNDS = 10;
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCK_DURATION_MINUTES = 30;
-const REDIS_TOKEN_PREFIX = 'auth:app:user:';
+
+/** 登录请求 — 各端 DTO 只要结构兼容即可 */
+export interface LoginParams {
+  type: string;
+  username?: string;
+  phone?: string;
+  password?: string;
+  verificationCode?: string;
+}
+
+/** 注册请求 */
+export interface RegisterParams {
+  type: string;
+  username?: string;
+  phone?: string;
+  password?: string;
+  verificationCode?: string;
+  nickname?: string;
+}
+
+/** 查询用户请求 */
+export interface QueryUserParams {
+  userId?: string;
+  username?: string;
+  phone?: string;
+}
+
+/** 登录/注册成功后的用户信息 */
+export interface AuthUserResult {
+  userId: string;
+  username: string | null;
+  nickname: string | null;
+}
+
+/** 用户详情 */
+export interface UserInfoResult {
+  userId: string;
+  username: string | null;
+  nickname: string | null;
+  avatarUrl: string | null;
+  phone: string | null;
+  registrationSource: string;
+  lastLoginAt: Date | null;
+  createdAt: Date;
+}
 
 @Injectable()
-export class UserServices {
-  private readonly logger = new Logger(UserServices.name);
+export class UserAuthService {
+  private readonly logger = new Logger(UserAuthService.name);
 
   constructor(
     @InjectRepository(UserEntity)
@@ -33,10 +76,8 @@ export class UserServices {
   /**
    * 登录
    */
-  public async loginAppUser(
-    loginDto: AppLoginDto,
-  ): Promise<{ userId: string; username: string | null; nickname: string | null }> {
-    const user = await this.findUserForLogin(loginDto);
+  public async login(params: LoginParams, client: AuthClient): Promise<AuthUserResult> {
+    const user = await this.findUserForLogin(params);
     if (!user) {
       throw new AppDataNotFoundException('用户不存在');
     }
@@ -50,7 +91,7 @@ export class UserServices {
       throw new AppBusinessException('账号已被禁用');
     }
 
-    await this.verifyPassword(loginDto, user);
+    await this.verifyPassword(params, user);
 
     if (user.failedLoginCount > 0) {
       await this.userRepo.update(user.id, { failedLoginCount: 0, lockedUntil: null });
@@ -60,17 +101,17 @@ export class UserServices {
 
     const tokenResult = await this.authService.signToken({
       sub: user.id,
-      client: AuthClient.APP,
+      client,
       extra: { username: user.username },
     });
 
     await this.redisService.set(
-      `${REDIS_TOKEN_PREFIX}${user.id}`,
+      this.tokenKey(user.id, client),
       tokenResult.accessToken,
       tokenResult.expiresIn,
     );
 
-    this.logger.log(`用户登录成功: ${user.id}`);
+    this.logger.log(`用户登录成功: client=${client}, userId=${user.id}`);
 
     return {
       userId: user.id,
@@ -80,44 +121,34 @@ export class UserServices {
   }
 
   /**
-   * 获取用户 Token（用于 Controller 设置响应头）
-   */
-  public async getAppToken(userId: string): Promise<string | null> {
-    return this.redisService.get(`${REDIS_TOKEN_PREFIX}${userId}`);
-  }
-
-  /**
    * 注册 — 事务保证原子性
    */
-  public async registerAppUser(registerDto: AppRegisterDto): Promise<void> {
+  public async register(params: RegisterParams, client: AuthClient): Promise<void> {
     await this.dataSource.transaction(async (manager) => {
-      // 检查用户是否已存在
-      await this.checkUserExists(manager, registerDto);
+      await this.checkUserExists(manager, params);
 
       const user = manager.create(UserEntity, {
-        ...this.buildRegisterData(registerDto),
+        ...this.buildRegisterData(params),
         registrationSource: UserRegistrationSource.APP,
       });
 
       await manager.save(user);
-      this.logger.log(`用户注册成功: ${user.id}`);
+      this.logger.log(`用户注册成功: client=${client}, userId=${user.id}`);
     });
   }
 
   /**
    * 查询用户信息
    */
-  public async queryUserInfo(
-    queryDto: AppQueryUserDto,
-  ): Promise<{ userId: string; username: string | null; nickname: string | null; avatarUrl: string | null; phone: string | null; registrationSource: string; lastLoginAt: Date | null; createdAt: Date }> {
+  public async queryUser(params: QueryUserParams): Promise<UserInfoResult> {
     const where: Record<string, string> = {};
 
-    if (queryDto.userId) {
-      where.id = queryDto.userId;
-    } else if (queryDto.username) {
-      where.username = queryDto.username;
-    } else if (queryDto.phone) {
-      where.phone = queryDto.phone;
+    if (params.userId) {
+      where.id = params.userId;
+    } else if (params.username) {
+      where.username = params.username;
+    } else if (params.phone) {
+      where.phone = params.phone;
     }
 
     const user = await this.userRepo.findOne({ where });
@@ -138,36 +169,47 @@ export class UserServices {
   }
 
   /**
-   * 退出登录 — 删除 Redis 中的 Token
+   * 获取 Token
    */
-  public async logout(userId: string): Promise<void> {
-    await this.redisService.del(`${REDIS_TOKEN_PREFIX}${userId}`);
-    this.logger.log(`用户退出登录: ${userId}`);
+  public async getToken(userId: string, client: AuthClient): Promise<string | null> {
+    return this.redisService.get(this.tokenKey(userId, client));
+  }
+
+  /**
+   * 退出登录
+   */
+  public async logout(userId: string, client: AuthClient): Promise<void> {
+    await this.redisService.del(this.tokenKey(userId, client));
+    this.logger.log(`用户退出登录: client=${client}, userId=${userId}`);
   }
 
   // ━━━ 私有方法 ━━━
 
-  private async findUserForLogin(loginDto: AppLoginDto): Promise<UserEntity | null> {
-    if (loginDto.type === AppLoginType.ACCOUNT_PASSWORD) {
-      return this.userRepo.findOne({ where: { username: loginDto.username } });
+  private tokenKey(userId: string, client: AuthClient): string {
+    return `auth:${client}:user:${userId}`;
+  }
+
+  private async findUserForLogin(params: LoginParams): Promise<UserEntity | null> {
+    if (params.type === 'account_password') {
+      return this.userRepo.findOne({ where: { username: params.username } });
     }
-    if (loginDto.type === AppLoginType.PHONE_PASSWORD || loginDto.type === AppLoginType.PHONE_CODE) {
-      return this.userRepo.findOne({ where: { phone: loginDto.phone } });
+    if (params.type === 'phone_password' || params.type === 'phone_code') {
+      return this.userRepo.findOne({ where: { phone: params.phone } });
     }
     return null;
   }
 
-  private async verifyPassword(loginDto: AppLoginDto, user: UserEntity): Promise<void> {
-    if (loginDto.type === AppLoginType.PHONE_CODE) {
+  private async verifyPassword(params: LoginParams, user: UserEntity): Promise<void> {
+    if (params.type === 'phone_code') {
       // TODO: 验证短信验证码
       return;
     }
 
-    if (!loginDto.password || !user.passwordHash) {
+    if (!params.password || !user.passwordHash) {
       throw new AppUnauthorizedException('用户名或密码错误');
     }
 
-    const isMatch = await bcrypt.compare(loginDto.password, user.passwordHash);
+    const isMatch = await bcrypt.compare(params.password, user.passwordHash);
     if (!isMatch) {
       const newCount = user.failedLoginCount + 1;
       const updateData: Partial<UserEntity> = { failedLoginCount: newCount };
@@ -183,11 +225,11 @@ export class UserServices {
 
   private async checkUserExists(
     manager: import('typeorm').EntityManager,
-    registerDto: AppRegisterDto,
+    params: RegisterParams,
   ): Promise<void> {
-    if (registerDto.type === AppRegisterType.USERNAME_PASSWORD && registerDto.username) {
+    if (params.type === 'username_password' && params.username) {
       const existing = await manager.findOne(UserEntity, {
-        where: { username: registerDto.username },
+        where: { username: params.username },
       });
       if (existing) {
         throw new AppConflictException('用户名已存在');
@@ -195,12 +237,11 @@ export class UserServices {
     }
 
     if (
-      (registerDto.type === AppRegisterType.PHONE_PASSWORD ||
-        registerDto.type === AppRegisterType.PHONE_CODE) &&
-      registerDto.phone
+      (params.type === 'phone_password' || params.type === 'phone_code') &&
+      params.phone
     ) {
       const existing = await manager.findOne(UserEntity, {
-        where: { phone: registerDto.phone },
+        where: { phone: params.phone },
       });
       if (existing) {
         throw new AppConflictException('该手机号已注册');
@@ -208,26 +249,26 @@ export class UserServices {
     }
   }
 
-  private buildRegisterData(registerDto: AppRegisterDto): Partial<UserEntity> {
+  private buildRegisterData(params: RegisterParams): Partial<UserEntity> {
     const data: Partial<UserEntity> = {};
 
-    if (registerDto.type === AppRegisterType.USERNAME_PASSWORD) {
-      data.username = registerDto.username!;
-      data.passwordHash = bcrypt.hashSync(registerDto.password!, SALT_ROUNDS);
+    if (params.type === 'username_password') {
+      data.username = params.username!;
+      data.passwordHash = bcrypt.hashSync(params.password!, SALT_ROUNDS);
     }
 
-    if (registerDto.type === AppRegisterType.PHONE_PASSWORD) {
-      data.phone = registerDto.phone!;
-      data.passwordHash = bcrypt.hashSync(registerDto.password!, SALT_ROUNDS);
+    if (params.type === 'phone_password') {
+      data.phone = params.phone!;
+      data.passwordHash = bcrypt.hashSync(params.password!, SALT_ROUNDS);
     }
 
-    if (registerDto.type === AppRegisterType.PHONE_CODE) {
-      data.phone = registerDto.phone!;
+    if (params.type === 'phone_code') {
+      data.phone = params.phone!;
       // TODO: 验证短信验证码
     }
 
-    if (registerDto.nickname) {
-      data.nickname = registerDto.nickname;
+    if (params.nickname) {
+      data.nickname = params.nickname;
     }
 
     return data;
