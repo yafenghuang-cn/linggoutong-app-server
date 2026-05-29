@@ -4,3 +4,8 @@ server:
 spring:
   application:
     name: linggoutong-app-server
+  devtools:
+    restart:
+      enabled: true
+      poll-interval: 500
+      quiet-period: 300

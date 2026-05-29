@@ -13,10 +13,9 @@ public class HealthController {
 
     @GetMapping("/health")
     public Result<Map<String, String>> health() {
-//        Map<String, String> data = new HashMap<>();
-//        data.put("status", "UP");
-//        data.put("service", "linggoutong-app-server");
-        throw new BusinessException("用户不存在");
-//        return Result.success(data);
+        Map<String, String> data = new HashMap<>();
+        data.put("status", "UP");
+        data.put("service", "linggoutong-app-server");
+        return Result.success(data);
     }
 }
