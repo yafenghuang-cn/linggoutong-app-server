@@ -1,18 +1,18 @@
 // src/app.module.ts
+import { INJECTION_TOKENS } from '@/common/injection-tokens';
+import { RequestContextMiddleware } from '@/common/request-context.middleware';
+import { GlobalResponseWrapperInterceptor } from '@/shared/global-response.interceptor';
+import { HttpExceptionFilter } from '@/shared/http-exception.interceptor';
+import { RequestLoggingInterceptor } from '@/shared/request-logging.interceptor';
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { INJECTION_TOKENS } from '@/common/injection-tokens';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { HttpExceptionFilter } from '@/shared/http-exception.interceptor';
-import { GlobalResponseWrapperInterceptor } from '@/shared/global-response.interceptor';
-import { RequestLoggingInterceptor } from '@/shared/request-logging.interceptor';
-import { RequestContextMiddleware } from '@/common/request-context.middleware';
 
-import { CoreAuthModule, AuthGuard } from '@/core/auth';
+import { AuthGuard, CoreAuthModule } from '@/core/auth';
 import { CoreRedisModule } from '@/core/redis/redis.module';
 import { CoreUserModule } from '@/core/user';
-import { AppsModule } from '@/apps/module';
+import { UserModule } from '@/module/user.module';
 
 @Module({
   imports: [
@@ -34,7 +34,7 @@ import { AppsModule } from '@/apps/module';
     CoreRedisModule,
     CoreAuthModule,
     CoreUserModule,
-    AppsModule,
+    UserModule,
   ],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: RequestLoggingInterceptor },

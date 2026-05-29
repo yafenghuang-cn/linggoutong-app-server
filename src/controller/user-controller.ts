@@ -1,10 +1,10 @@
+import { AuthClient, Public } from '@/core/auth';
+import { UserAuthService } from '@/core/user/user-auth.service';
+import { AppLoginDto, AppQueryUserDto, AppRegisterDto } from '@/dto/userDto';
+import { AppLoginVo, AppUserInfoVo } from '@/vo/userVo';
 import { Body, Controller, Get, Post, Query, Res } from '@nestjs/common';
 import { ApiBody, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
-import { AppLoginDto, AppQueryUserDto, AppRegisterDto } from '@/apps/dto/userDto';
-import { AppLoginVo, AppUserInfoVo } from '@/apps/vo/userVo';
-import { UserAuthService } from '@/core/user/user-auth.service';
-import { AuthClient, Public } from '@/core/auth';
 
 @ApiTags('/app/user')
 @Controller('/app/user')
