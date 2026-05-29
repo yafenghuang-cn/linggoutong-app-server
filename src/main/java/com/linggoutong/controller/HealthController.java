@@ -1,5 +1,7 @@
 package com.linggoutong.controller;
 
+import com.linggoutong.common.BusinessException;
+import com.linggoutong.common.Result;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -10,10 +12,11 @@ import java.util.Map;
 public class HealthController {
 
     @GetMapping("/health")
-    public Map<String, String> health() {
-        Map<String, String> response = new HashMap<>();
-        response.put("status", "UP");
-        response.put("service", "linggoutong-app-server");
-        return response;
+    public Result<Map<String, String>> health() {
+//        Map<String, String> data = new HashMap<>();
+//        data.put("status", "UP");
+//        data.put("service", "linggoutong-app-server");
+        throw new BusinessException("用户不存在");
+//        return Result.success(data);
     }
 }
