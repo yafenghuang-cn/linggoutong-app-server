@@ -14,6 +14,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
@@ -23,11 +24,15 @@ public class SecurityConfig {
     private final JwtUtils jwtUtils;
     private final StringRedisTemplate redisTemplate;
     private final NoAuthAuthorizationManager noAuthAuthorizationManager;
+    private final NoAuthFilter noAuthFilter;
 
-    public SecurityConfig(JwtUtils jwtUtils, StringRedisTemplate redisTemplate, NoAuthAuthorizationManager noAuthAuthorizationManager) {
+    public SecurityConfig(JwtUtils jwtUtils, StringRedisTemplate redisTemplate,
+                          NoAuthAuthorizationManager noAuthAuthorizationManager,
+                          NoAuthFilter noAuthFilter) {
         this.jwtUtils = jwtUtils;
         this.redisTemplate = redisTemplate;
         this.noAuthAuthorizationManager = noAuthAuthorizationManager;
+        this.noAuthFilter = noAuthFilter;
     }
 
     @Bean
@@ -35,6 +40,8 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // 添加 NoAuthFilter，在 JWT 验证之前处理 @NoAuth 注解
+                .addFilterBefore(noAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/user/login", "/user/register").permitAll()
                         .requestMatchers("/error").permitAll()

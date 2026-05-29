@@ -26,10 +26,10 @@ public class UserController {
     @NoAuth
     @Operation(summary = "用户登录", description = "用户登录获取 JWT Token")
     @PostMapping("/login")
-    public Result<LoginVO> login(@RequestBody LoginRequest request, HttpServletResponse response) {
+    public Result<UserVO> login(@RequestBody LoginRequest request, HttpServletResponse response) {
         LoginVO loginVO = userService.login(request);
         response.setHeader("Authorization", "Bearer " + loginVO.getToken());
-        return Result.success(loginVO);
+        return Result.success(loginVO.getUser());
     }
 
     @NoAuth
