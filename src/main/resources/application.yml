@@ -9,3 +9,40 @@ spring:
       enabled: true
       poll-interval: 500
       quiet-period: 300
+
+  # MySQL 配置
+  datasource:
+    url: jdbc:mysql://120.53.227.126:3306/linggoutong-test?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: huangyafeng
+    password: Hyf@20001120
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  # Redis 配置
+  data:
+    redis:
+      host: 120.53.227.126
+      port: 6379
+      password: 5820@Feng
+      database: 1
+
+  # Spring Security OAuth2 Resource Server 配置
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          secret-value: linggoutong-secret-key-must-be-at-least-256-bits-long
+
+# MyBatis-Plus 配置
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+
+# JWT 配置
+jwt:
+  secret: linggoutong-secret-key-must-be-at-least-256-bits-long
+  expiration: 86400000
