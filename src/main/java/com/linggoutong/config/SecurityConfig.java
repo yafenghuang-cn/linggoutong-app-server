@@ -38,6 +38,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/user/login", "/user/register").permitAll()
                         .requestMatchers("/error").permitAll()
+                        // API 文档路径放行
+                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        .requestMatchers("/v3/api-docs/**").permitAll()
+                        .requestMatchers("/webjars/**").permitAll()
+                        .requestMatchers("/api-docs/**", "/api-docs.html").permitAll()
                         .anyRequest().access(noAuthAuthorizationManager)
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2

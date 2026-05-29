@@ -46,3 +46,10 @@ mybatis-plus:
 jwt:
   secret: linggoutong-secret-key-must-be-at-least-256-bits-long
   expiration: 86400000
+
+# SpringDoc (Swagger) 配置
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: false
